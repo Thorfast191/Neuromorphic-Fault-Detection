@@ -141,7 +141,8 @@ class CWRUDataset(BaseDataset):
 
     def __getitem__(self, index):
 
-        x, y = super().__getitem__(index)
+        x = self.samples[index]
+        y = self.labels[index]
 
         if self.transform is not None:
 

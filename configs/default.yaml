@@ -16,6 +16,13 @@ dataset:
 
   normalize: true
 
+  channel: DE
+
+  split:
+    train: 0.70
+    val: 0.15
+    test: 0.15
+
 training:
   epochs: 100
 
@@ -25,11 +32,39 @@ training:
 
   optimizer: Adam
 
+  loss: ce_count
+
+  early_stopping:
+    patience: 10
+    mode: max
+    min_delta: 0.0
+
 model:
-  architecture: lif
+  architecture: lif_classifier
+
+  input_size: 2
+
+  hidden_sizes: [128]
+
+  num_classes: 10
+
+  beta: 0.9
+
+  surrogate_name: fast_sigmoid
 
 encoding:
-  type: rate
+  type: delta
+
+  threshold: 0.1
+
+  bin_size: 8
+
+evaluation:
+  confidence_threshold: 0.2
+
+  compare_baseline: true
+
+  baseline_architecture: cnn1d
 
 results:
   output_dir: results
