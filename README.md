@@ -83,7 +83,9 @@ comparison) to `results/report/`.
   pending Phase B).
 - `configs/default.yaml` — the single experiment configuration file.
 
-Everything not listed above (`simulation/`, most of `baselines/`, most of
-`deployment/`, `models/synapses/{stdp,hebbian,plasticity}.py`, alternative
-neuron/network architectures, etc.) is scaffolded but intentionally deferred
-to a later milestone.
+The repo was trimmed to only what's implemented for Phase A — empty
+placeholder modules for later milestones (additional baselines, other
+neuron/network architectures, STDP/online adaptation, hardware exports,
+augmentation, optimization/quantization, tests, etc.) were removed rather
+than left as unimplemented stubs. They'll be added back as Phase B work
+(real Arduino deployment, online adaptation) actually needs them.
