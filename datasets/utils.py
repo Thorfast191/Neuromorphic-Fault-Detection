@@ -101,11 +101,11 @@ def load_signal(
 
     mat = load_mat(file)
 
-    suffix = SUPPORTED_CHANNELS[channel]
+    suffix = SUPPORTED_CHANNELS[channel].lower()
 
     for key, value in mat.items():
 
-        if key.endswith(suffix):
+        if key.lower().endswith(suffix):
 
             return value.squeeze().astype(np.float32)
 
@@ -127,9 +127,11 @@ def available_channels(
 
     for channel, suffix in SUPPORTED_CHANNELS.items():
 
+        suffix = suffix.lower()
+
         for key in mat.keys():
 
-            if key.endswith(suffix):
+            if key.lower().endswith(suffix):
 
                 channels.append(channel)
 

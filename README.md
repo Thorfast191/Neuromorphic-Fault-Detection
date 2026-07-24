@@ -46,8 +46,15 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Download the [CWRU Bearing Data Center](https://engineering.case.edu/bearingdatacenter)
-`.mat` files into `data/raw/CWRU/`.
+Download CWRU bearing `.mat` files into `data/raw/CWRU/`, either from the
+[official CWRU Bearing Data Center](https://engineering.case.edu/bearingdatacenter)
+or a Kaggle mirror. `find_mat_files` scans `data/raw/CWRU/` recursively, so
+any subfolder layout works. Fault files must be named with a
+`B007`/`B014`/`B021`/`IR007`/`IR014`/`IR021`/`OR007`/`OR014`/`OR021` prefix
+(case-insensitive, e.g. `B007_0.mat` or `IR014_1_175.mat` both work) and the
+healthy baseline file must contain "normal" anywhere in its filename (e.g.
+`Normal_0.mat` or `Time_Normal_1_098.mat`) — this is the standard convention
+most CWRU redistributions (including most Kaggle mirrors) already use.
 
 ## Usage
 

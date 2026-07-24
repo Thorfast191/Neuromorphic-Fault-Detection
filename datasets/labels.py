@@ -69,25 +69,45 @@ def filename_to_label(file: str | Path) -> int:
     """
     Convert a CWRU filename into an integer class label.
 
+    Matching is case-insensitive to tolerate naming variations across
+    different distributions/mirrors of the dataset (e.g. Kaggle
+    repackagings). Fault files are matched by their B/IR/OR + severity
+    prefix (e.g. "b007_0.mat", "IR014_1_175.mat"); the healthy baseline
+    file is matched by the "normal" token appearing anywhere in the
+    filename, since its naming varies more across sources (e.g.
+    "Normal_0.mat", "Time_Normal_1_098.mat").
+
     Examples
     --------
     >>> filename_to_label("B007_0.mat")
     1
 
-    >>> filename_to_label("IR014_2.mat")
+    >>> filename_to_label("IR014_1_175.mat")
     5
 
-    >>> filename_to_label("Normal_3.mat")
+    >>> filename_to_label("Time_Normal_1_098.mat")
     0
     """
 
-    stem = Path(file).stem
+    stem = Path(file).stem.lower()
+
+    if "normal" in stem:
+        return int(BearingLabel.NORMAL)
 
     for prefix, label in LABEL_MAP.items():
-        if stem.startswith(prefix):
+
+        if prefix == "Normal":
+            continue
+
+        if stem.startswith(prefix.lower()):
             return int(label)
 
-    raise ValueError(f"Unknown CWRU filename: {file}")
+    fault_prefixes = [p for p in LABEL_MAP if p != "Normal"]
+
+    raise ValueError(
+        f"Unknown CWRU filename: {file}. Expected one of the fault-code "
+        f"prefixes {fault_prefixes} or 'normal' to appear in the filename."
+    )
 
 
 def label_to_name(label: int) -> str:
