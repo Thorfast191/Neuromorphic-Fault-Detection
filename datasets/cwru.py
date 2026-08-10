@@ -70,6 +70,11 @@ class CWRUDataset(BaseDataset):
     def prepare(self) -> None:
         """
         Load every MAT file and create windows.
+
+        Each window's source file index is tracked in `self.groups`,
+        so a downstream group-aware split (see
+        `train.compute_or_load_split`) can keep overlapping windows
+        from the same recording out of both sides of a split.
         """
 
         files = find_mat_files(self.root)
@@ -79,7 +84,9 @@ class CWRUDataset(BaseDataset):
                 f"No .mat files found in {self.root}"
             )
 
-        for file in files:
+        self.groups = []
+
+        for file_idx, file in enumerate(files):
 
             signal = load_signal(
                 file,
@@ -94,6 +101,9 @@ class CWRUDataset(BaseDataset):
             self.labels.extend(
                 [label] * len(windows)
             )
+            self.groups.extend(
+                [file_idx] * len(windows)
+            )
 
         self.samples = np.asarray(
             self.samples,
@@ -102,6 +112,11 @@ class CWRUDataset(BaseDataset):
 
         self.labels = np.asarray(
             self.labels,
+            dtype=np.int64,
+        )
+
+        self.groups = np.asarray(
+            self.groups,
             dtype=np.int64,
         )
 

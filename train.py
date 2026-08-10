@@ -12,9 +12,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import math
+
 import numpy as np
 import torch
-from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
 
 from datasets.cwru import CWRUDataset
@@ -97,11 +98,24 @@ def compute_or_load_split(
     output_dir: Path,
 ) -> tuple[list[int], list[int], list[int]]:
     """
-    Stratified train/val/test split over `dataset`, cached to
+    Group-safe train/val/test split over `dataset`, cached to
     `<output_dir>/splits.json` so every later run (including
     evaluate.py and a baseline model trained on a differently-
     transformed copy of the same dataset) sees an identical held-out
     test set.
+
+    Windows overlap within a recording (`dataset.overlap`), so a
+    plain random/stratified split over window indices would put
+    near-duplicate windows on both sides of the split - a model can
+    then partly "test" on windows it has effectively already seen in
+    training. Instead this splits chronologically *within* each
+    source recording (`dataset.groups`, one id per source file) and
+    drops the handful of windows straddling each cut, so no window in
+    one split shares a raw sample with a window in another. Every
+    CWRU file maps to exactly one class (see
+    `datasets.labels.filename_to_label`), so splitting every file the
+    same way keeps the per-class proportions close to
+    `dataset.split` without needing separate stratification.
     """
 
     split_path = output_dir / "splits.json"
@@ -110,39 +124,43 @@ def compute_or_load_split(
         split = load_json(split_path)
         return split["train"], split["val"], split["test"]
 
-    indices = np.arange(len(dataset))
-    labels = dataset.labels
-
     split_cfg = cfg["dataset"]["split"]
-    test_size = split_cfg["test"]
-    val_size = split_cfg["val"]
+    train_ratio = split_cfg["train"]
+    val_ratio = split_cfg["val"]
 
-    train_val_idx, test_idx = train_test_split(
-        indices,
-        test_size=test_size,
-        stratify=labels,
-        random_state=cfg["seed"],
-    )
+    window_size = cfg["dataset"]["window_size"]
+    step = int(window_size * (1 - cfg["dataset"]["overlap"]))
 
-    val_ratio = val_size / (1.0 - test_size)
+    # Windows within this many positions of each other share raw
+    # samples; dropped at each cut so no split boundary leaks.
+    buffer = max(0, math.ceil(window_size / step) - 1) if step > 0 else 0
 
-    train_idx, val_idx = train_test_split(
-        train_val_idx,
-        test_size=val_ratio,
-        stratify=labels[train_val_idx],
-        random_state=cfg["seed"],
-    )
+    train_idx, val_idx, test_idx = [], [], []
+
+    for group_id in np.unique(dataset.groups):
+
+        group_indices = np.flatnonzero(dataset.groups == group_id)
+        n = len(group_indices)
+
+        cut1 = round(n * train_ratio)
+        cut2 = cut1 + round(n * val_ratio)
+
+        train_idx.extend(group_indices[: max(0, cut1 - buffer)].tolist())
+        val_idx.extend(
+            group_indices[cut1 + buffer : max(cut1 + buffer, cut2 - buffer)].tolist()
+        )
+        test_idx.extend(group_indices[cut2 + buffer :].tolist())
 
     save_json(
         {
-            "train": train_idx.tolist(),
-            "val": val_idx.tolist(),
-            "test": test_idx.tolist(),
+            "train": train_idx,
+            "val": val_idx,
+            "test": test_idx,
         },
         split_path,
     )
 
-    return train_idx.tolist(), val_idx.tolist(), test_idx.tolist()
+    return train_idx, val_idx, test_idx
 
 
 def parse_args() -> argparse.Namespace:

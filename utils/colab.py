@@ -113,6 +113,7 @@ def mount_drive(mountpoint: str = DEFAULT_MOUNTPOINT) -> Path:
 def setup(
     project_dir: str = DEFAULT_PROJECT_DIR,
     mountpoint: str = DEFAULT_MOUNTPOINT,
+    trial: str | None = None,
     install_deps: bool = True,
     verbose: bool = True,
 ) -> dict:
@@ -120,7 +121,8 @@ def setup(
     Prepare the runtime for training.
 
     In Colab: installs missing dependencies, mounts Drive, and sets
-    `NFD_RESULTS_DIR` to `MyDrive/<project_dir>/results` so
+    `NFD_RESULTS_DIR` to `MyDrive/<project_dir>/results` (or
+    `MyDrive/<project_dir>/<trial>/results` when `trial` is given) so
     checkpoints survive a disconnect. Elsewhere: reports the local
     paths and changes nothing.
 
@@ -128,11 +130,18 @@ def setup(
         project_dir: Folder under `MyDrive` holding this project's
             results. Keep it stable across sessions to resume.
         mountpoint: Where to mount Drive.
+        trial: Subfolder isolating this run's checkpoints, logs and
+            report from other trials, e.g. "trial_2". Give every
+            trial (a retrain with different code, config or data) its
+            own name - reusing one silently mixes its checkpoints and
+            cached split with a previous, possibly incompatible run.
+            Omit to write straight to the project's `results/`
+            folder.
         install_deps: Install missing packages (Colab only).
         verbose: Print a summary of the resolved paths.
 
     Returns:
-        Dict with `in_colab`, `results_dir`, `data_root` and
+        Dict with `in_colab`, `results_dir`, `data_root`, `trial` and
         `drive_dir` (None outside Colab).
     """
 
@@ -151,7 +160,7 @@ def setup(
             installed = install_missing()
 
         drive_dir = mount_drive(mountpoint) / project_dir
-        results_dir = drive_dir / "results"
+        results_dir = (drive_dir / trial / "results") if trial else (drive_dir / "results")
         results_dir.mkdir(parents=True, exist_ok=True)
 
         os.environ[ENV_RESULTS_DIR] = str(results_dir)
@@ -176,6 +185,8 @@ def setup(
             print(f"installed   : {', '.join(installed)}")
 
         print(f"project root: {project_root()}")
+        if trial:
+            print(f"trial       : {trial}")
         print(f"results dir : {results_dir}")
         print(f"data root   : {data_root if data_root else f'NOT FOUND - {data_error}'}")
 
@@ -189,5 +200,6 @@ def setup(
         "in_colab": running_in_colab,
         "results_dir": results_dir,
         "data_root": data_root,
+        "trial": trial,
         "drive_dir": drive_dir,
     }

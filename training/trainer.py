@@ -69,8 +69,13 @@ class Trainer:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Logger name is scoped to output_dir (not a shared "trainer"
+        # literal): `logging.getLogger` caches by name process-wide,
+        # so a shared name would make a second Trainer's log lines
+        # (e.g. the baseline trained after the SNN in the same
+        # process) silently land in the first Trainer's log file.
         self.logger = get_logger(
-            "trainer",
+            f"trainer.{self.output_dir.name}",
             log_dir=str(self.output_dir / "logs"),
         )
 
