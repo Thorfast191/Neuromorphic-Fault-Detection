@@ -60,6 +60,7 @@ most CWRU redistributions (including most Kaggle mirrors) already use.
 
 ```bash
 python train.py --config configs/default.yaml
+python train.py --resume                      # continue an interrupted run
 python evaluate.py --config configs/default.yaml
 ```
 
@@ -69,6 +70,43 @@ python evaluate.py --config configs/default.yaml
 optionally trains the dense CNN1D baseline for comparison, and writes a full
 report (per-class/severity-tier breakdowns, confusion matrix, energy/sparsity
 comparison) to `results/report/`.
+
+## Training on Google Colab (GPU, disconnect-safe)
+
+Colab wipes the runtime on disconnect, so checkpoints are written to mounted
+Google Drive and training resumes from the last completed epoch.
+
+1. Open `main_trial_1.ipynb` in Colab (`Runtime > Change runtime type > GPU`).
+2. Run **§0 Environment setup**. It clones this repo if needed, installs
+   `snntorch`, mounts Drive, and points results at
+   `MyDrive/Neuromorphic-Fault-Detection/results`.
+3. Run the notebook top to bottom.
+
+If the session drops, reconnect and re-run §0 → §5. Training continues from the
+last checkpoint, restoring model weights, optimizer state, early-stopping
+patience, history and RNG state — a resumed run is bit-identical to an
+uninterrupted one.
+
+The CWRU `.mat` files ship in the repo under `cwru/`, so no dataset upload is
+needed. Checkpoints are written atomically (temp file + rename), so a
+disconnect mid-save cannot corrupt the file you resume from.
+
+### Path resolution
+
+Both entry points resolve paths at runtime instead of trusting the config
+verbatim, so the same code runs locally and in a fresh clone:
+
+| | resolution order |
+|---|---|
+| Results | `NFD_RESULTS_DIR` env var → `results.output_dir` |
+| Dataset | `NFD_DATA_ROOT` env var → `dataset.root` → first of `cwru/`, `data/raw/CWRU/` containing `.mat` files |
+
+So a Colab shell cell can also run the scripts directly:
+
+```bash
+NFD_RESULTS_DIR=/content/drive/MyDrive/Neuromorphic-Fault-Detection/results \
+  python train.py --resume
+```
 
 ## Repository layout
 
@@ -81,8 +119,10 @@ comparison) to `results/report/`.
   `LIFClassifier` network.
 - `baselines/` — dense `CNN1DBaseline` used as the energy/accuracy reference
   point.
-- `training/` — model-agnostic `Trainer`, loss/optimizer factories, early
-  stopping, checkpointing.
+- `training/` — model-agnostic `Trainer` (resumable), loss/optimizer
+  factories, early stopping, checkpointing.
+- `utils/paths.py`, `utils/colab.py` — runtime path resolution and the Colab
+  Drive-mount bootstrap.
 - `evaluation/` — classification metrics, severity-tier/incipient-detection
   breakdown, sparsity/energy estimation, report generation.
 - `explainability/` — spike-activity telemetry and interpretability tools.

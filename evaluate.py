@@ -37,13 +37,14 @@ from training.optimizer import build_optimizer
 from training.trainer import Trainer
 from utils.config import Config
 from utils.device import get_device
+from utils.paths import resolve_dataset_root, resolve_results_dir
 from utils.seed import set_seed
 
 
 def _build_dataset(cfg: dict, transform):
 
     return CWRUDataset(
-        root=cfg["dataset"]["root"],
+        root=resolve_dataset_root(cfg),
         window_size=cfg["dataset"]["window_size"],
         overlap=cfg["dataset"]["overlap"],
         channel=cfg["dataset"]["channel"],
@@ -111,7 +112,20 @@ def _evaluate_snn(cfg: dict, results_dir: Path, device) -> dict:
     }
 
 
-def _train_and_evaluate_baseline(cfg: dict, results_dir: Path, device) -> dict:
+def _train_and_evaluate_baseline(
+    cfg: dict,
+    results_dir: Path,
+    device,
+    resume: bool = True,
+) -> dict:
+    """
+    Train the dense baseline on the same split and evaluate it.
+
+    Resumes from its own last checkpoint by default, since this runs
+    for as many epochs as the SNN and is just as likely to be cut
+    short by a Colab disconnect. Pass resume=False to force a
+    retrain from scratch.
+    """
 
     baseline_cfg = {
         **cfg,
@@ -157,7 +171,12 @@ def _train_and_evaluate_baseline(cfg: dict, results_dir: Path, device) -> dict:
         use_tensorboard=False,
     )
 
-    trainer.fit(train_loader, val_loader, epochs=cfg["training"]["epochs"])
+    trainer.fit(
+        train_loader,
+        val_loader,
+        epochs=cfg["training"]["epochs"],
+        resume=resume,
+    )
     checkpoint_manager.load_best(model, device=device)
 
     result = trainer.evaluate(test_loader)
@@ -251,7 +270,7 @@ def main() -> None:
         else torch.device(cfg["device"])
     )
 
-    results_dir = Path(cfg["results"]["output_dir"])
+    results_dir = resolve_results_dir(cfg)
 
     snn_result = _evaluate_snn(cfg, results_dir, device)
 

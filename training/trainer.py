@@ -16,6 +16,7 @@ from tqdm import tqdm
 
 from utils.logger import get_logger
 from utils.metrics import classification_metrics
+from utils.seed import capture_rng_state, restore_rng_state
 from utils.timer import Timer
 
 
@@ -141,13 +142,86 @@ class Trainer:
     # Public API
     # ------------------------------------------------------------
 
-    def fit(self, train_loader, val_loader, epochs: int) -> list[dict]:
+    def _resume(self) -> int:
+        """
+        Restore model, optimizer, history, early-stopping counters and
+        RNG state from the last checkpoint.
+
+        Returns
+        -------
+        int
+            The epoch to start from (1 if there is nothing to resume).
+        """
+
+        if self.checkpoint_manager is None:
+            return 1
+
+        state = self.checkpoint_manager.load_last(
+            self.model,
+            self.optimizer,
+            device=self.device,
+        )
+
+        if state is None:
+            self.logger.info("No checkpoint found - starting from scratch.")
+            return 1
+
+        self.history = state.get("history", [])
+
+        if self.early_stopping is not None:
+            self.early_stopping.load_state_dict(state.get("early_stopping"))
+
+        restore_rng_state(state.get("rng_state"))
+
+        last_epoch = int(state["epoch"])
+
+        self.logger.info(
+            "Resumed from %s at epoch %d (best %s=%.4f).",
+            self.checkpoint_manager.last_path,
+            last_epoch,
+            self.checkpoint_manager.metric_name,
+            self.checkpoint_manager.best_value
+            if self.checkpoint_manager.best_value is not None
+            else float("nan"),
+        )
+
+        return last_epoch + 1
+
+    def fit(
+        self,
+        train_loader,
+        val_loader,
+        epochs: int,
+        resume: bool = False,
+    ) -> list[dict]:
         """
         Run the training loop, checkpointing and early-stopping on
         validation accuracy.
+
+        Parameters
+        ----------
+        resume : bool
+            Continue from `last.pt` if one exists, instead of
+            restarting at epoch 1. `epochs` stays the total target,
+            not a count of additional epochs.
         """
 
-        for epoch in range(1, epochs + 1):
+        start_epoch = self._resume() if resume else 1
+
+        if start_epoch > epochs:
+
+            self.logger.info(
+                "Checkpoint is already at epoch %d of %d - nothing to do.",
+                start_epoch - 1,
+                epochs,
+            )
+
+            if self.writer is not None:
+                self.writer.close()
+
+            return self.history
+
+        for epoch in range(start_epoch, epochs + 1):
 
             with Timer() as timer:
                 train_metrics = self._run_epoch(train_loader, train=True)
@@ -179,6 +253,13 @@ class Trainer:
                     {
                         "model_state": self.model.state_dict(),
                         "optimizer_state": self.optimizer.state_dict(),
+                        "history": self.history,
+                        "early_stopping": (
+                            self.early_stopping.state_dict()
+                            if self.early_stopping is not None
+                            else None
+                        ),
+                        "rng_state": capture_rng_state(),
                     },
                     epoch,
                     val_metrics["accuracy"],

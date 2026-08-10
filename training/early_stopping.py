@@ -68,6 +68,30 @@ class EarlyStopping:
 
         return self.counter >= self.patience
 
+    def state_dict(self) -> dict:
+        """
+        Serializable counters, so patience is not silently reset when
+        an interrupted run resumes from a checkpoint.
+        """
+
+        return {
+            "best": self.best,
+            "best_epoch": self.best_epoch,
+            "counter": self.counter,
+        }
+
+    def load_state_dict(self, state: dict | None) -> None:
+        """
+        Restore counters saved by `state_dict`.
+        """
+
+        if not state:
+            return
+
+        self.best = state.get("best")
+        self.best_epoch = state.get("best_epoch")
+        self.counter = state.get("counter", 0)
+
     def __repr__(self) -> str:
         return (
             f"EarlyStopping(patience={self.patience}, mode='{self.mode}', "

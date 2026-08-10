@@ -29,6 +29,7 @@ from training.trainer import Trainer
 from utils.config import Config
 from utils.device import get_device
 from utils.io import load_json, save_json
+from utils.paths import resolve_dataset_root, resolve_results_dir
 from utils.seed import set_seed
 
 
@@ -150,6 +151,15 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--config", default="configs/default.yaml")
 
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Continue from the last checkpoint if one exists. --epochs "
+            "stays the total target, not extra epochs."
+        ),
+    )
+
     return parser.parse_args()
 
 
@@ -167,13 +177,16 @@ def main() -> None:
         else torch.device(cfg["device"])
     )
 
-    results_dir = Path(cfg["results"]["output_dir"])
+    # Resolved rather than read straight from the config so a Colab
+    # run can redirect results to mounted Drive and find the MAT
+    # files wherever the clone put them. See utils/paths.py.
+    results_dir = resolve_results_dir(cfg)
     output_dir = results_dir / cfg["model"]["architecture"]
 
     transform = build_transform(cfg)
 
     dataset = CWRUDataset(
-        root=cfg["dataset"]["root"],
+        root=resolve_dataset_root(cfg),
         window_size=cfg["dataset"]["window_size"],
         overlap=cfg["dataset"]["overlap"],
         channel=cfg["dataset"]["channel"],
@@ -228,7 +241,12 @@ def main() -> None:
         output_dir=output_dir,
     )
 
-    trainer.fit(train_loader, val_loader, epochs=cfg["training"]["epochs"])
+    trainer.fit(
+        train_loader,
+        val_loader,
+        epochs=cfg["training"]["epochs"],
+        resume=args.resume,
+    )
 
 
 if __name__ == "__main__":
